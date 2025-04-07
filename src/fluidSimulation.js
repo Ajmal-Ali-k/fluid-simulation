@@ -414,10 +414,9 @@ export class FluidSimulation {
     this.pointers.forEach(p => {
       if (p.moved) {
         p.moved = false;
-        const color = generateColor();
         const dx = p.deltaX * this.config.SPLAT_FORCE;
         const dy = p.deltaY * this.config.SPLAT_FORCE;
-        this.splat(p.x, p.y, dx, dy, color);
+        this.splat(p.texcoordX, p.texcoordY, dx, dy, p.color);
       }
     });
   }
@@ -698,6 +697,18 @@ export class FluidSimulation {
     return radius;
   }
 
+  correctDeltaX(delta) {
+    let aspectRatio = this.canvas.width / this.canvas.height;
+    if (aspectRatio < 1) delta *= aspectRatio;
+    return delta;
+  }
+
+  correctDeltaY(delta) {
+    let aspectRatio = this.canvas.width / this.canvas.height;
+    if (aspectRatio > 1) delta /= aspectRatio;
+    return delta;
+  }
+
   getTextureScale(texture, width, height) {
     return {
       x: width / texture.width,
@@ -713,8 +724,8 @@ export class FluidSimulation {
       color.b *= 10.0;
       const x = Math.random();
       const y = Math.random();
-      const dx = 1000 * (Math.random() - 0.5);
-      const dy = 1000 * (Math.random() - 0.5);
+      const dx = this.config.RANDOM_SPLAT_FORCE * (Math.random() - 0.5);
+      const dy = this.config.RANDOM_SPLAT_FORCE * (Math.random() - 0.5);
       this.splat(x, y, dx, dy, color);
     }
   }

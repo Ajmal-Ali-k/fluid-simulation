@@ -12,52 +12,82 @@ function App() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Set initial canvas size
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const pixelRatio = window.devicePixelRatio || 1;
+    
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    // Initialize simulation
     const simulation = new FluidSimulation(canvas, config);
+    simulationRef.current = simulation;
     simulation.init();
 
-    // Handle pointer events
+    // Initialize pointers array
     const pointers = [];
     let lastPointerId = -1;
 
+    const getCanvasRelativePosition = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left) * pixelRatio,
+        y: (clientY - rect.top) * pixelRatio
+      };
+    };
+
     const updatePointerDownData = (id, posX, posY) => {
-      pointers.push({
-        id,
-        x: posX,
-        y: posY,
-        prevX: posX,
-        prevY: posY,
-        deltaX: 0,
-        deltaY: 0,
-        moved: false,
-        color: generateColor()
-      });
+      let pointer = pointers.find(p => p.id === id);
+      if (!pointer) {
+        pointer = {
+          id,
+          texcoordX: 0,
+          texcoordY: 0,
+          prevTexcoordX: 0,
+          prevTexcoordY: 0,
+          deltaX: 0,
+          deltaY: 0,
+          down: false,
+          moved: false,
+          color: generateColor()
+        };
+        pointers.push(pointer);
+      }
+      pointer.id = id;
+      pointer.down = true;
+      pointer.moved = false;
+      pointer.texcoordX = posX / canvas.width;
+      pointer.texcoordY = 1.0 - posY / canvas.height;
+      pointer.prevTexcoordX = pointer.texcoordX;
+      pointer.prevTexcoordY = pointer.texcoordY;
+      pointer.deltaX = 0;
+      pointer.deltaY = 0;
+      pointer.color = generateColor();
     };
 
     const updatePointerMoveData = (id, posX, posY) => {
       const pointer = pointers.find(p => p.id === id);
-      if (pointer) {
-        pointer.deltaX = (posX - pointer.prevX) * 10.0; // Scale up the delta
-        pointer.deltaY = (posY - pointer.prevY) * 10.0; // Scale up the delta
-        pointer.moved = Math.abs(pointer.deltaX) > 0 || Math.abs(pointer.deltaY) > 0;
-        pointer.prevX = pointer.x;
-        pointer.prevY = pointer.y;
-        pointer.x = posX;
-        pointer.y = posY;
-      }
+      if (!pointer || !pointer.down) return;
+      
+      pointer.prevTexcoordX = pointer.texcoordX;
+      pointer.prevTexcoordY = pointer.texcoordY;
+      pointer.texcoordX = posX / canvas.width;
+      pointer.texcoordY = 1.0 - posY / canvas.height;
+      pointer.deltaX = simulation.correctDeltaX(pointer.texcoordX - pointer.prevTexcoordX);
+      pointer.deltaY = simulation.correctDeltaY(pointer.texcoordY - pointer.prevTexcoordY);
+      pointer.moved = Math.abs(pointer.deltaX) > 0 || Math.abs(pointer.deltaY) > 0;
     };
 
     const updatePointerUpData = (id) => {
-      const index = pointers.findIndex(p => p.id === id);
-      if (index > -1) {
-        pointers.splice(index, 1);
+      const pointer = pointers.find(p => p.id === id);
+      if (pointer) {
+        pointer.down = false;
       }
-    };
-
-    const getCanvasRelativePosition = (clientX, clientY) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = (clientX - rect.left) / rect.width;
-      const y = 1.0 - (clientY - rect.top) / rect.height; // Flip Y coordinate
-      return { x, y };
     };
 
     const handlePointerDown = (e) => {
@@ -84,7 +114,22 @@ function App() {
       e.preventDefault();
     };
 
+    // Add resize handler
+    const handleResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const pixelRatio = window.devicePixelRatio || 1;
+      
+      canvas.width = width * pixelRatio;
+      canvas.height = height * pixelRatio;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      
+      simulation.init();
+    };
+
     // Add event listeners
+    window.addEventListener('resize', handleResize);
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUp);
@@ -123,11 +168,12 @@ function App() {
 
     // Cleanup
     return () => {
-      gui.destroy();
+      window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerup', handlePointerUp);
       canvas.removeEventListener('pointerleave', handlePointerUp);
+      gui.destroy();
     };
   }, []);
 
